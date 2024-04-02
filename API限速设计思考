@@ -1,0 +1,68 @@
+================================限速器设计思考=================================================
+public boolean rateLimit(Long userId){
+	if redis.get()==null //并发同时获取到值null
+		redis.set(prefix_userid,1,1,TimeUnit.seconds)
+		long r = redis.incr();
+		if(r<1000)
+			return true;
+		return false;
+		
+	else
+		if redis.incr()<1000
+			return true
+		else	
+			return false
+}
+
+
+public boolean rateLimit(Long userId){//1s 1000
+	long seconds = System.currentMills()/1000;
+	long r = redis.incr(userId_seconds);
+	if r<1000
+		return true
+	else 
+		redis.delete
+		return false
+}
+Map<Long,LinkedBlockingQueue<Long>> userRateMap = new ConcurrentHashMap<Long,LinkedBlockingQueue<Long>>();
+public boolean rateLimit(Long userId){//3s两千  单机
+	if(!userRateMap.containsKey(userId)){
+		synchronized(userId){
+			if(!userRateMap.containsKey(userId)){
+				userRateMap.put(userId,new LinkedBlockingQueue<Long>(2000));
+			}
+		}
+	}
+	LinkedBlockingQueue<Long> window = userRateMap.get(userId);
+	Long currentTime = System.currentMills();
+	Long startTime = currentTime -3000;
+	Long e = window.peek();
+	while(window.size()>0 && e<startTime){
+		window.remove(e);
+		e = window.peek();
+	}
+	return window.offer(currentTime);
+}
+
+public boolean rateLimit(Long userId){
+	String key = prefix+"_"+userId;
+	Long e = redis.lindex(key,0);
+	if(e == null){
+		redis.lock(key+"_lock");
+		e = redis.lindex(key,0);
+		if(e == null){
+			redis.rpush(key,0);
+		}
+		redis.unlock(key+"_lock");
+		
+	}
+	Long currentTime = System.currentMills;
+	Long startTime = currentTime-3000;
+	e = redis.lindex(key,0);
+	while(redis.llen(key)>0 && e<startTime){
+		redis.lpop(key);
+		e = redis.lindex(key,0);
+	}
+	redis.rpush(key,currentTime);
+	return redis.llen(key)<=2000;
+}
