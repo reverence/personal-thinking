@@ -1,0 +1,49 @@
+==========================长链转锻炼设计思考============================================
+
+private char[] chars={'0','1'...}//length 62
+public String shortUrl(String longUrl){//长转短
+
+	String id = generateId(longUrl);
+	save2Db(id,longUrl);//性能瓶颈,可以异步保存
+	save2Cache()
+
+}
+
+public String longUrl(String shortUrl){//根据短返回实际url
+	String id = getIdFromUrl(shortUrl);
+	getFromCache()
+	if miss
+		select long_url from short_long_url where url_id=#{id};
+		save2Cache();
+	else
+		expire time delay 1 hour
+	return long_url;
+}
+
+private String generateId(String url){
+	Long id = select last_insert_id();//1、拆分成2个数据库实例insert（一个单数，一个双数） 2、一次性load一批到内存，每次更新起始值 3、发号器 如snowflake算法
+	String result = "";
+	while(id>0){
+		int r = id%62;
+		r = r/62;
+		result = char[r]+result;
+	}
+	return result;
+}
+
+private String getIdFromUrl(String url){
+	int index = url.lastIndexOf("/");
+	String id = url.substring(index+1);
+	return id;
+}
+
+create table short_long_url(
+	id bigint(20) not null auto_increment comment '主键',
+	url_id varchar(7) not null comment 'short url id',
+	long_url varchar(2048) not null comment 'long url',
+	create_time datetime comment '创建时间',
+	update_time datetime comment '更新时间',
+	primary key(id),
+	unique key uk(url_id)
+	
+)engine=innodb charset=yutf8m64;
