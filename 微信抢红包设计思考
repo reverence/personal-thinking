@@ -1,0 +1,74 @@
+create table red_packet(
+ id bigint(20) not null auto_increment,
+ amount decimal(8) not null comment '红包总金额',
+ num int(4) not null comment '红包个数',
+ create_time datetime comment '创建时间',
+ update_time datetime comment '更新时间',
+ primary key(id)
+)engine=innodb;
+
+//100块发给10个人
+//先算好每个红包的金额，塞进redis
+insert into red_packet(amount,num)values(100,10);
+生成10个red packet,塞进redis redis.rpush(key,list);
+
+public BigDecimal getRedPacket(Long userId){
+	BigDecimal a = redis.lpop(key);//如果lpop后系统宕机了，红包可能没有抢完，但实际提示已经抢完了
+	if(null == a){
+		throw new BusinessException("红包抢完了");
+	}
+	loop: select amount,num as count from red_packet;
+	BigDecimal newAmount = amount-a;
+	if(newAmount>0){
+		count = count-1;
+		int r = update red_packet set amount=newAmount and num = count where num=num and amount=amount;
+		if(r>0){
+			mq.send(userId,a);
+			return a;
+		}
+		goto loop;
+	}else{
+		throw new BusinessException("红包抢完了");
+	}
+}
+//预算分配好红包，写入数据库
+create table red_packet_detail(
+ id bigint(20) not null auto_increment,
+ amount decimal(8) not null comment '红包金额',
+ user_id bigint(20) null comment '用户id',
+ red_packet_id bigint(20) not null comment '红包id';
+ create_time datetime comment '创建时间',
+ update_time datetime comment '更新时间',
+ primary key(id),
+ key idx_red_id(red_packet_id)
+)engine=innodb;
+//redis计数器塞入红包个数，然后+2
+public BigDecimal getRedPacket(Long userId){
+	
+	Long r = redis.incrBy(key,-1);
+	if(r<0){
+		throw new BusinessException("红包抢完了");
+	}
+	loop:select amount as oldAmount from red_packet where id=redPacketId;
+	if(oldAmount>0){
+		List<IdAndAmount> detailIds = select id from red_packet_detail where red_packet_id=redPacketId and user_id is null;
+		if(detailIds == null || detailIds.size()<=0){
+			throw new BusinessException("红包抢完了");
+		}
+		Random random = new Random();
+		int index = random.nextInt(detailIds.size());
+		BigDecimal amount = detailIds.get(index).getAmount();
+		Long detailId = detailIds.get(index).getId();
+		int result = update red_packet_detail set user_id=userId where id=detailId and user_id is null;
+		if(result == 1){
+			newAmount = oldAmount-amount;
+			update red_packet set amount = newAmount where id=redPacketId;
+			return amount;
+		}else{
+			goto loop;
+		}
+	}else{
+		throw new BusinessException("红包抢完了");
+	}	
+}
+
