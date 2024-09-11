@@ -1,0 +1,91 @@
+背景:
+在一些复杂业务流程中，经常会存在一些列的校验，比如有A,B,C,D,E5个流程校验，流程之间前后有顺序性，
+比如B不能发生在A之前，E不能发生在D之前，但某些流程可以跳过：
+举例说明:
+业务场景1需要经过ABD三个校验流程，业务场景2需要经过BCD三个校验流程，业务场景需要经过CDE三个流程校验，
+随着业务发展，在某些场景，可能需要在原有校验流程的基础上进行扩展校验。
+基于以上的需求，我们可以通过模板方法和策略模式来实现：
+我们的出发点，在业务主流程种函数调用尽可能简洁，不希望又长又臭的校验逻辑出现在主流程种，毕竟校验只是其中一环,我们希望代码类似如下：
+public void business(){
+	//其他业务代码
+	StrategyFactory.get(BaseChecker.class).strategy(m).check(m,n);//其中m为泛型M的实例，n为泛型N的实例
+	//其他业务代码
+}
+基于上面的函数调用,我们可以实现一个通用的策略模式+模板方法处理器。首先定义一个基础的AbstractBaseStrategy类，它主要用于具体的实现类继承，并且挑选出合适的策略执行器：
+public abstract class AbstractBaseStrategy<M> {
+    public abstract boolean strategy(M n);//依赖于实际策略执行器的实现
+
+    public void registry(){
+        StrategyFactory.registry(this);//注册到策略容器种，考虑到现在java基本都用spring框架，可以加个@PostConstruct标签，自动注入到容器
+    }
+}
+接下来实现模板，将涉及的校验流程均在模板中处理体现:
+public  abstract  class BaseChecker<M,N> extends AbstractBaseStrategy<M> {
+    public void check(M m,N n){
+        checkA();
+        checkB();
+        checkC();
+        checkD();
+        checkE();
+        checkOther();
+    }
+
+    protected void checkA(){
+        //以下为代码
+    }
+    
+    protected void checkB(){
+        //以下为代码
+    }    
+    
+    protected void checkC(){
+        //
+    }
+    
+    protected void checkD(){
+        //
+    }
+    
+    protected void checkE(){
+        //
+    }
+    
+    protected void checkOther(){//作为扩展项
+        //
+    }
+    
+}
+比如场景1场景只需要A，B，C校验，那么可以建一个策略器C1,覆盖D和E的函数即可
+public class C1 extends BaseChecker<String,String> {
+    @Override
+    public boolean strategy(String str) {//此处用于决定该策略器是否会被选中
+        return "C1".equalsIgnoreCase(str);
+    }
+
+    @Override
+    protected void checkD() {
+        
+    }
+
+    @Override
+    protected void checkE() {
+        
+    }
+    
+}
+场景2需要在校验A的基础上再增加自己的校验，创建策略器C2：
+public class C2 extends BaseChecker<String,String> {
+    @Override
+    public boolean strategy(String str) {
+        return "C2".equalsIgnoreCase(str);
+    }
+
+    @Override
+    protected void checkA() {
+        super.checkA();
+        //以下添加自己的逻辑
+    }
+}
+如果需要额外的其他校验，可以重写checkOther方法实现。接下来就是策略容器的实现了，它对外主要提供两个功能，一是策略器注册，二是策略器的获取:
+
+
