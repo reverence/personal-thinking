@@ -87,5 +87,52 @@ public class C2 extends BaseChecker<String,String> {
     }
 }
 如果需要额外的其他校验，可以重写checkOther方法实现。接下来就是策略容器的实现了，它对外主要提供两个功能，一是策略器注册，二是策略器的获取:
+public class StrategyFactory {
+
+    private static final List<Object> objList = new ArrayList<>();
+
+    private static final ConcurrentHashMap<Class,InnerStrategy> clsMap = new ConcurrentHashMap<>();
+
+    public static void registry(Object targetObj){
+        objList.add(targetObj);//记录所有策略执行器
+    }
+
+    public static <K> InnerStrategy<K> get(Class<K> cls){
+        if(clsMap.contains(cls)){
+            return clsMap.get(cls);
+        }
+        synchronized (cls){
+            for(Object obj : objList){
+                if(cls.isAssignableFrom(obj.getClass())){//选出父类为cls的所有策略执行器
+                    if(!clsMap.contains(cls)){
+                        clsMap.put(cls,new InnerStrategy());
+                    }
+                    clsMap.get(cls).getList().add((K)obj);
+                }
+            }
+        }
+
+        return clsMap.get(cls);
+    }
+
+    public static class InnerStrategy<K>{
+        private List<K> list = new ArrayList<>();
+
+        public K strategy(Object obj){
+         for(K k : list){
+             if(((AbstractBaseStrategy)k).strategy(obj)){
+                 return k;
+             }
+         }
+         throw new RuntimeException("未找到对应的策略执行器");
+        }
+
+        public List<K> getList() {
+            return list;
+        }
+    }
+
+    
+}
 
 
