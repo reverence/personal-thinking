@@ -1,0 +1,20 @@
+背景：
+业务中经常出现的场景，业务处理完成后，需要消息通过相关系统，这里就可能出现一致性问题：有可能业务处理落库成功了，消息发送失败了，
+此时就需要有个机制来保证业务处理与消息发送的一致性。我们的业务场景(如保险下单)并不会存在太高的并发，基于此只需实现一个简易的mqclient即可满足要求
+思路：
+采用本地消息表的方式，新建一张mq_client_msg_table(mysql为例):
+create table mq_client_msg_table(
+	id bigint(20) not null auto_increment comment '主键',
+	destination varchar(128) not null comment '消息队列名称',
+	message text not null comment '消息体',
+	status int(11) not null comment '0-待发送1-发送成功2-发送失败',
+	retry_times int(11) not null default '0' comment '重试次数',
+	create_time timestamp not null default current_timestamp comment '创建时间',
+	update_time timestamp not null default current_timestamp on update current_timestamp comment '更新时间',
+	business_uk varchar(64) not null comment '业务唯一键',
+	version bigint not null default '0' comment '版本号',
+	primary key (id),
+	unique key mq_client_msg_uk(business_uk)
+);
+业务处理和插入本地消息表的操作在同一个事务内，成功提交后将消息发送出去，如果消息发送失败，自动重试。
+可参见mq-client工程实现
